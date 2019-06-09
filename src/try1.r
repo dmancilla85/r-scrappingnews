@@ -9,6 +9,7 @@ print("Starting research...")
 
 library(jsonlite)
 library(selectr)
+library(XML)
 library(xml2)
 library(stringr)
 library(rvest)
@@ -75,6 +76,7 @@ desc2 <- str_replace_all(desc2, "[\r\n\t]" , "")
 desc2 <- str_trim(desc2)
 head(desc2)
 
+
 # scrape product rating 
 rate_html <- html_nodes(webpage, "span#acrPopover")
 rate <- html_text(rate_html)
@@ -114,3 +116,79 @@ json_data <- toJSON(product_data)
 
 # print output
 prettify(json_data)
+
+
+# #################################################################################################
+# NewsApi token: f4a88e83555a4ffd91669835d38efedf
+# #################################################################################################
+
+#install.packages("request")
+library(request)
+
+url = "https://newsapi.org/v2/top-headlines?country=ar&apiKey=f4a88e83555a4ffd91669835d38efedf"
+
+json <- api("https://newsapi.org/v2/top-headlines") %>%
+      api_query(country = ar, apiKey=f4a88e83555a4ffd91669835d38efedf, 
+                category=general, pageSize=100, 
+                q=cristina, wt="json") 
+
+json <- api("https://newsapi.org/v2/everything") %>%
+      api_query(apiKey=f4a88e83555a4ffd91669835d38efedf, 
+                q=kirchner, language=es,wt="json",pageSize=100) 
+
+json <- toJSON(json)
+df <- fromJSON(json)
+
+prettify(json)
+
+title <- unlist(df$articles$title)
+source <- unlist(df$articles$source)
+date <- unlist(df$articles$publishedAt)
+
+all <- cbind(title,source[1:100],date)
+write.csv2(all,"caca.csv")
+
+
+## sentiment analisys
+#install.packages("NLP")
+library(NLP)
+
+#install.packages("syuzhet")
+library(syuzhet)
+
+my_example_text <- "I begin this story with a neutral statement.  
+  Basically this is a very silly test.  
+  You are testing the Syuzhet package using short, inane sentences.  
+  I am actually very happy today. 
+  I have finally finished writing this package.  
+  Tomorrow I will be very sad. 
+  I won't have anything left to do. 
+  I might get angry and decide to do something horrible.  
+  I might destroy the entire package and start from scratch.  
+  Then again, I might find it satisfying to have completed my first R package. 
+  Honestly this use of the Fourier transformation is really quite elegant.  
+  You might even say it's beautiful!"
+s_v <- get_sentences(my_example_text)
+s_t <- get_tokens(s_v)
+sent <- get_sentiment(s_t)
+
+plot(
+  sent, 
+  type="l", 
+  main="Example Plot Trajectory", 
+  xlab = "Narrative Time", 
+  ylab= "Emotional Valence"
+)
+
+##
+path_to_a_text_file <- system.file("extdata", "quijote.txt",package = "syuzhet")
+my_text <- get_text_as_string(path_to_a_text_file)
+char_v <- get_sentences(my_text)
+method <- "nrc"
+lang <- "spanish"
+my_text_values <- get_nrc_sentiment(char_v, language=lang)
+head(my_text_values,10)
+
+
+
+
