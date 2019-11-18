@@ -39,7 +39,8 @@ library(rvest)
 # hunspell_suggest(bad[[1]])
 #-----
 
-
+# scrapear IMDB
+a_posteriori <- "https://www.imdb.com/search/title/?title=batman"
 
 scrapeNode = function(webpage, node){
   node_html <- html_nodes(webpage, paste("h1#",title,sep=""))
