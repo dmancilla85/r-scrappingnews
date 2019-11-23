@@ -1,5 +1,10 @@
 
 
+# String manipulations
+if (!require(stringr)) {
+  install.packages("stringr")
+  library(stringr)
+}
 
 # Handling promises
 if (!require(future)) {
@@ -31,9 +36,9 @@ if (!require(jsonlite)) {
 }
 
 # API connections
-if (!require(future)) {
-  instal.packages("future")
-  library(future)
+if (!require(request)) {
+  instal.packages("request")
+  library(request)
 }
 
 
@@ -51,7 +56,7 @@ NewsApi <- setRefClass(
     query = "character",
     searchInTitles = "logical",
     topNews = "logical",
-    category ="character"
+    category = "character"
   )
 )
 
@@ -70,8 +75,8 @@ newsApiCategories <-
 
 
 # Functions
-getNews <- function(obj){
-  if(isTRUE(obj$topNews)){
+getNews <- function(obj) {
+  if (isTRUE(obj$topNews)) {
     df <- getTopHeadLines(obj)
     return(df)
   } else {
@@ -81,9 +86,15 @@ getNews <- function(obj){
 }
 
 # ################################# #
+showError <- function(err, type="Error:"){
+  print(paste(type,err$message))
+  print(paste("Call:",err$call))
+}
+
+
 
 # ################################# #
-verifyResponse <- function(request) {
+verifyResponse <- function(myRequest) {
   df <- data.frame(
     title = character(),
     description = character(),
@@ -94,11 +105,14 @@ verifyResponse <- function(request) {
     source.name = character()
   )
   
-  if (request$status != "ok") {
-    print(paste(request$status, request$code, ":", request$message))
-  } else {
-    df <- convertFromJSON(request)
-  }
+  tryCatch(
+    if (myRequest$status != "ok") {
+      print(paste(myRequest$status, myRequest$code, ":", myRequest$message))
+    } else {
+      df <- convertFromJSON(myRequest)
+    },
+    warning = function(err){showError(err, "Warning")},
+    error = function(err){showError(err)})
   
   return(df)
 }
@@ -107,7 +121,7 @@ verifyResponse <- function(request) {
 # ################################# #
 
 # ################################# #
-getEverything <- function(obj, 
+getEverything <- function(obj,
                           freeAccountMode = TRUE) {
   df_request = getEverythingPerPage(obj, 1)
   
@@ -126,7 +140,7 @@ getEverything <- function(obj,
     return(df_request)
   }
   
-  if(totalPages == 1){
+  if (totalPages == 1) {
     df_request$totalResults <- NULL
     return(df_request)
   }
@@ -162,7 +176,6 @@ getEverything <- function(obj,
 # ################################# #
 getEverythingPerPage <- function(obj,
                                  currentPage = 1) {
-  
   ep_everything <- "https://newsapi.org/v2/everything"
   
   
@@ -280,7 +293,10 @@ convertFromJSON <- function(request) {
   df_request$title <- unlist(df_request$title) #ok
   
   df_request$description <- as.character(df_request$description)
-  df_request$description <- unlist(df_request$description) #ok
+  df_request$description <- unlist(df_request$description) #
+  
+  df_request[df_request$description  %in% c("", "NULL"),]$description <-
+    df_request[df_request$description  %in% c("", "NULL"),]$title
   
   df_request$url <- as.character(df_request$url)
   df_request$url <- unlist(df_request$url) #ok
@@ -295,6 +311,14 @@ convertFromJSON <- function(request) {
   
   df_request$content <- as.character(df_request$content)
   df_request$content <- unlist(df_request$content)
+  df_request$content <-
+    str_replace_all(df_request$content, "chars]", "")
+  df_request$content <-
+    str_remove_all(df_request$content, "[+,0-9]")
+  df_request$content <- gsub("\\[|\\]", "", df_request$content)
+  
+  df_request[df_request$content %in% c("", "NULL"),]$content <-
+    df_request[df_request$content %in% c("", "NULL"),]$description
   
   df_request$source.name <- as.character(df_request$source.name)
   df_request$source.name <- unlist(df_request$source.name)

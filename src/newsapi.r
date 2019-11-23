@@ -1,6 +1,4 @@
 
-
-
 source("./src/framework.r")
 
 # Sentiment analisys
@@ -20,11 +18,11 @@ newsApi <- NewsApi(
   # Country
   language = 'es',
   # Language
-  from = paste('"', '2019-10-18', '"', sep = ""),
+  from = paste('"', '2019-11-17', '"', sep = ""),
   # older as one month back (free User)
-  to = paste('"', '2019-11-18', '"', sep = ""),
+  to = paste('"', '2019-11-19', '"', sep = ""),
   # dates surround with "
-  query = paste('"', 'dólar', '"', sep = ''),
+  query = paste('"', 'Añez', '"', sep = ''),
   # query surround with "
   searchInTitles = TRUE,
   # Search in titles
@@ -32,7 +30,7 @@ newsApi <- NewsApi(
   # category for top headlines
   sortBy = "publishedAt",
   # sort criteria
-  topNews = FALSE
+  onlyLatestNews = TRUE
 )
 
 
@@ -46,44 +44,51 @@ df_req <- getNews(newsApi)
 # 3. Sentiment Analisys
 ###############################################################################
 
-df_top <-
-  df_req %>% filter(source.name %in% c("La Nacion", "Clarin.com", "Perfil.com","CNN"))
+df_top <-df_req #%>% filter(source.name %in% c("La Nacion", "Clarin.com", "Perfil.com","CNN"))
 
+
+df_top$id <- (1:nrow(df_top))
 
 # Collect all descriptions
 for (i in 1:nrow(df_top)) {
-  my_text <- df_top$title[i]
+  my_text <- df_top$content[i]
   char_v <- get_sentences(my_text)
   
   if (i == 1) {
     nrc_data <-
       get_nrc_sentiment(char_v,
                         language = "spanish")
-    
     nrc_sum <- colSums(nrc_data)
+    nrc_data$id <- i
   } else {
     aux_data <-
       get_nrc_sentiment(char_v,
                         language = "spanish")
     #print(aux_data)
     nrc_sum <- nrc_sum + colSums(aux_data)
+    auxdata <- cbind(df_top[i,]$id)
+    aux_data$id <- i
+    nrc_data <- rbind(nrc_data, aux_data)
   }
 }
 
-tb <- data.frame(rbind(nrc_sum[1:7]))
-colnames(tb) <-
-  c("Ira",
-    "Esperanza",
-    "Asco",
-    "Miedo",
-    "Alegría",
-    "Tristeza",
-    "Sorpresa")
-tb <- pivot_longer(tb, cols = colnames(tb), names_to = "Sentimiento")
+df <- df_top %>% inner_join(nrc_data, by="id") #%>% filter(id==3)
+
+###########################
+# tb <- data.frame(rbind(nrc_sum[1:7]))
+# colnames(tb) <-
+#   c("Ira",
+#     "Esperanza",
+#     "Asco",
+#     "Miedo",
+#     "Alegría",
+#     "Tristeza",
+#     "Sorpresa")
+df <- pivot_longer(df, cols = c("anger","anticipation","disgust","fear","joy","sadness","surprise","trust","negative","positive"), names_to = "Sentimiento") %>% filter(!(Sentimiento %in% c("positive","negative","trust")))
 
 
 
-tb %>% ggplot(aes(x = Sentimiento, y = value, fill = Sentimiento)) +
-  geom_bar(stat = "identity") + ggtitle(newsApi$query, subtitle = nrow(df_top)) +
+df %>% ggplot(aes(x = Sentimiento, y = value, fill = source.name)) +
+  geom_bar(stat = "identity",col="black") + ggtitle(newsApi$query, subtitle = nrow(df_top)) +
   coord_flip()
 
