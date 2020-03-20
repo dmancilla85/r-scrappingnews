@@ -1,4 +1,9 @@
 
+# Sentiment Analysis
+if(!require(syuzhet)){
+  install.packages("syuzhet")
+  library(syuzhet)
+}
 
 # String manipulations
 if (!require(stringr)) {
@@ -57,6 +62,30 @@ NewsApi <- setRefClass(
     searchInTitles = "logical",
     topNews = "logical",
     category = "character"
+  ),
+  methods = list(
+    initialize = function(p_pageSize = 100,
+                          p_country = "ar",
+                          p_language = "es",
+                          p_sortBy = "publishedAt",
+                          p_from = "",
+                          p_to = "",
+                          p_query = "",
+                          p_searchInTitles = FALSE,
+                          p_topNews = FALSE,
+                          p_category = "general") {
+      .self$token <- "f4a88e83555a4ffd91669835d38efedf"
+      .self$pageSize <- p_pageSize
+      .self$country <- p_country
+      .self$language <- p_language
+      .self$sortBy <- p_sortBy
+      .self$from <- paste('"', p_query, '"', sep = "")
+      .self$to <- paste('"', p_to, '"', sep = "")
+      .self$query <- paste('"', p_query, '"', sep = "")
+      .self$searchInTitles <- p_searchInTitles
+      .self$topNews <- p_topNews
+      .self$category <- p_category
+    }
   )
 )
 
@@ -73,8 +102,94 @@ newsApiCategories <-
     "technology")
 
 
+# ### FUNCTIONS ### #
 
-# Functions
+# ################################# #
+
+# ################################# #
+processWithNRC <- function(df, lang = "es") {
+  df$id <- (1:nrow(df))
+  
+  language <- "spanish"
+  
+  if (lang == "es") {
+    language <- "spanish"
+  } else if (lang == "en") {
+    language <- "english"
+  }
+  
+  
+  # Collect all descriptions
+  for (i in 1:nrow(df)) {
+    my_text <- df$content[i]
+    char_v <- get_sentences(my_text)
+    
+    if (i == 1) {
+      nrc_data <-
+        get_nrc_sentiment(char_v,
+                          language = "spanish")
+      nrc_sum <- colSums(nrc_data)
+      nrc_data$id <- i
+    } else {
+      aux_data <-
+        get_nrc_sentiment(char_v,
+                          language = "spanish")
+      #print(aux_data)
+      nrc_sum <- nrc_sum + colSums(aux_data)
+      auxdata <- cbind(df[i,]$id)
+      aux_data$id <- i
+      nrc_data <- rbind(nrc_data, aux_data)
+    }
+  }
+  
+  df <- df %>% inner_join(nrc_data, by = "id")
+  
+  return(df)
+}
+
+
+# ################################# #
+
+# ################################# #
+plotSentiment <- function(df, title, subtitle) {
+  nrc  <-
+    pivot_longer(
+      df,
+      cols = c(
+        "anger",
+        "anticipation",
+        "disgust",
+        "fear",
+        "joy",
+        "sadness",
+        "surprise",
+        "trust",
+        "negative",
+        "positive"
+      ),
+      names_to = "Sentimiento"
+    ) %>% filter(!(Sentimiento %in% c("positive", "negative", "trust")))
+  nrc
+  nrc[nrc$Sentimiento == "anger", ]$Sentimiento = "Ira"
+  nrc[nrc$Sentimiento == "anticipation", ]$Sentimiento = "Sorpresa"
+  nrc[nrc$Sentimiento == "disgust", ]$Sentimiento = "Desagrado"
+  nrc[nrc$Sentimiento == "fear", ]$Sentimiento = "Miedo"
+  nrc[nrc$Sentimiento == "joy", ]$Sentimiento = "Alegría"
+  nrc[nrc$Sentimiento == "sadness", ]$Sentimiento = "Tristeza"
+  nrc[nrc$Sentimiento == "surprise", ]$Sentimiento = "Sorpresa"
+  
+  plot <- nrc %>% ggplot(aes(x = Sentimiento, y = value, fill = source.name)) +
+    geom_bar(stat = "identity", col = "black") + ggtitle(title, subtitle) +
+    coord_flip() + xlab("Score")  + labs(fill="Fuente") + scale_color_brewer()
+  
+  return(plot)
+  
+}
+
+
+# ################################# #
+
+# ################################# #
 getNews <- function(obj) {
   if (isTRUE(obj$topNews)) {
     df <- getTopHeadLines(obj)
@@ -85,13 +200,17 @@ getNews <- function(obj) {
   }
 }
 
+
 # ################################# #
-showError <- function(err, type="Error:"){
-  print(paste(type,err$message))
-  print(paste("Call:",err$call))
+
+# ################################# #
+showError <- function(err, type = "Error:") {
+  print(paste(type, err$message))
+  print(paste("Call:", err$call))
 }
 
 
+# ################################# #
 
 # ################################# #
 verifyResponse <- function(myRequest) {
@@ -111,8 +230,13 @@ verifyResponse <- function(myRequest) {
     } else {
       df <- convertFromJSON(myRequest)
     },
-    warning = function(err){showError(err, "Warning")},
-    error = function(err){showError(err)})
+    warning = function(err) {
+      showError(err, "Warning")
+    },
+    error = function(err) {
+      showError(err)
+    }
+  )
   
   return(df)
 }
@@ -239,6 +363,7 @@ getTopHeadLines <-
             apiKey = obj$token,
             pageSize = obj$pageSize,
             language = obj$language,
+            #q= obj$query Not available for now
             wt = "json"
           ) %>% api_error_handler(warn_for_status)
       ) %plan% multiprocess
@@ -252,6 +377,7 @@ getTopHeadLines <-
             category = obj$category,
             pageSize = obj$pageSize,
             language = obj$language,
+            #q= obj$query Not available for now
             wt = "json"
           ) %>% api_error_handler(warn_for_status)
       ) %plan% multiprocess
@@ -295,8 +421,8 @@ convertFromJSON <- function(request) {
   df_request$description <- as.character(df_request$description)
   df_request$description <- unlist(df_request$description) #
   
-  df_request[df_request$description  %in% c("", "NULL"),]$description <-
-    df_request[df_request$description  %in% c("", "NULL"),]$title
+  df_request[df_request$description  %in% c("", "NULL"), ]$description <-
+    df_request[df_request$description  %in% c("", "NULL"), ]$title
   
   df_request$url <- as.character(df_request$url)
   df_request$url <- unlist(df_request$url) #ok
@@ -317,8 +443,8 @@ convertFromJSON <- function(request) {
     str_remove_all(df_request$content, "[+,0-9]")
   df_request$content <- gsub("\\[|\\]", "", df_request$content)
   
-  df_request[df_request$content %in% c("", "NULL"),]$content <-
-    df_request[df_request$content %in% c("", "NULL"),]$description
+  df_request[df_request$content %in% c("", "NULL"), ]$content <-
+    df_request[df_request$content %in% c("", "NULL"), ]$description
   
   df_request$source.name <- as.character(df_request$source.name)
   df_request$source.name <- unlist(df_request$source.name)
