@@ -17,6 +17,18 @@ if (!require(future)) {
   library(future)
 }
 
+# TreeMap
+if (!require(treemap)) {
+  install.packages("treemap")
+  library(treemap)
+}
+
+# TreeMap
+if (!require(treemapify)) {
+  install.packages("treemapify")
+  library(treemapify)
+}
+
 # Data  manipulations
 if (!require(dplyr)) {
   install.packages("dplyr")
@@ -125,24 +137,21 @@ processWithNRC <- function(df, lang = "es") {
     char_v <- get_sentences(my_text)
     
     if (i == 1) {
-      nrc_data <-
-        get_nrc_sentiment(char_v,
-                          language = "spanish")
+      nrc_data <- get_nrc_sentiment(char_v, language = "spanish")
       nrc_sum <- colSums(nrc_data)
-      nrc_data$id <- i
+      nrc_sum <- append(nrc_sum, i)
+      names(nrc_sum) <- c( "anger","anticipation","disgust","fear","joy","sadness","surprise","trust","negative","positive","id");
     } else {
-      aux_data <-
-        get_nrc_sentiment(char_v,
-                          language = "spanish")
-      #print(aux_data)
-      nrc_sum <- nrc_sum + colSums(aux_data)
-      auxdata <- cbind(df[i,]$id)
-      aux_data$id <- i
-      nrc_data <- rbind(nrc_data, aux_data)
+      aux_data <- get_nrc_sentiment(char_v, language = "spanish")
+      aux_sum <- colSums(aux_data)
+      aux_sum <- append(aux_sum, i)
+      names(aux_sum) <- c( "anger","anticipation","disgust","fear","joy","sadness","surprise","trust","negative","positive","id");
+      
+      nrc_sum <- rbind(nrc_sum, aux_sum)
     }
   }
   
-  df <- df %>% inner_join(nrc_data, by = "id")
+  df <- df %>% inner_join(as.data.frame(nrc_sum), by = "id")
   
   return(df)
 }
@@ -171,7 +180,7 @@ plotSentiment <- function(df, title, subtitle) {
     ) %>% filter(!(Sentimiento %in% c("positive", "negative", "trust")))
   nrc
   nrc[nrc$Sentimiento == "anger", ]$Sentimiento = "Ira"
-  nrc[nrc$Sentimiento == "anticipation", ]$Sentimiento = "Sorpresa"
+  nrc[nrc$Sentimiento == "anticipation", ]$Sentimiento = "Expectativa"
   nrc[nrc$Sentimiento == "disgust", ]$Sentimiento = "Desagrado"
   nrc[nrc$Sentimiento == "fear", ]$Sentimiento = "Miedo"
   nrc[nrc$Sentimiento == "joy", ]$Sentimiento = "Alegría"
@@ -179,8 +188,15 @@ plotSentiment <- function(df, title, subtitle) {
   nrc[nrc$Sentimiento == "surprise", ]$Sentimiento = "Sorpresa"
   
   plot <- nrc %>% ggplot(aes(x = Sentimiento, y = value, fill = source.name)) +
-    geom_bar(stat = "identity", col = "black") + ggtitle(title, subtitle) +
-    coord_flip() + xlab("Score")  + labs(fill="Fuente") + scale_color_brewer()
+    geom_bar(stat = "identity") + 
+    ggtitle(title, subtitle) +
+    coord_flip() + 
+    xlab("Sentimiento") + 
+    ylab("Puntaje") + 
+    labs(fill="Fuente") + 
+    scale_color_brewer() +
+    theme_dark() +
+    theme_light()
   
   return(plot)
   
@@ -252,16 +268,15 @@ getEverything <- function(obj,
   if (nrow(df_request) == 0 || isTRUE(freeAccountMode)) {
     return(df_request)
   }
-  
+
   df_request$page <- 1
   
-  
-  totalPages <- as.integer(df_request$totalResults[1] / pageSize)
-  print(totalPages)
+  totalPages <- as.integer(df_request$totalResults[1] / obj$pageSize)
   
   if (totalPages == 0) {
     print("No hay resultados")
     return(df_request)
+    
   }
   
   if (totalPages == 1) {
